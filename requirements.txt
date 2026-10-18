@@ -1,2 +1,2 @@
 ﻿polars==2.0.0
-matplotlib
+matplotlib==3.11.2
