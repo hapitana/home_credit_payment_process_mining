@@ -1,0 +1,23 @@
+EVENT LOG VALIDATION REPORT
+===========================
+
+total_cases: 997,674
+mean_events_per_case: 13.63
+median_events_per_case: 10.00
+maximum_events_per_case: 293
+single_event_cases: 28,098
+cases_with_invalid_customer_count: 0
+cases_with_invalid_time_range: 0
+maximum_activity_types_per_case: 3
+
+ACTIVITY DISTRIBUTION
+=====================
+Early Payment: 9,309,477
+On-time Payment: 3,146,350
+Late Payment: 1,146,669
+
+METHODOLOGICAL NOTES
+====================
+Cases with one event may have incomplete observed payment histories.
+Payment timing categories describe payment outcomes, not the full business workflow.
+Equal timestamps may occur; secondary sorting is used for reproducible inspection, not to assert true event order.

@@ -1,0 +1,24 @@
+INSTALLMENT PAYMENT PROFILE
+============================
+
+Total records: 13,605,401
+Unique customers: 339,587
+Unique previous loans: 997,752
+Missing payment dates: 2,905
+Missing payment amounts: 2,905
+Records with payment timing: 13,602,496
+Early payment records: 9,309,477
+On-time payment records: 3,146,350
+Late payment records: 1,146,669
+Mean payment delay (days): -8.79
+Median payment delay (days): -6.00
+Total scheduled amount: 231,984,426,998.66
+Total recorded payment amount: 234,482,862,799.62
+
+INTERPRETATION NOTES
+====================
+Negative payment delay means payment before the due date.
+Zero payment delay means payment on the due date.
+Positive payment delay means payment after the due date.
+Missing payment dates are not automatically classified as late payments.
+These are record-level counts, not customer-level or loan-level late-payment rates.

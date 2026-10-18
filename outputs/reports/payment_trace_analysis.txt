@@ -1,0 +1,48 @@
+PAYMENT TRACE ANALYSIS
+======================
+
+Total cases: 997,674
+Unique trace variants: 196,042
+Mean events per case: 13.63
+Median events per case: 10.00
+
+TOP 20 TRACE VARIANTS
+=====================
+87,551 cases | 6.00 mean events | Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment
+57,017 cases | 12.00 mean events | Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment
+52,811 cases | 4.00 mean events | Early Payment -> Early Payment -> Early Payment -> Early Payment
+52,492 cases | 10.00 mean events | Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment
+42,420 cases | 5.00 mean events | Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment
+30,526 cases | 8.00 mean events | Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment
+27,549 cases | 3.00 mean events | Early Payment -> Early Payment -> Early Payment
+26,750 cases | 9.00 mean events | Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment
+26,148 cases | 7.00 mean events | Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment
+22,897 cases | 1.00 mean events | Early Payment
+22,813 cases | 11.00 mean events | Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment
+21,439 cases | 2.00 mean events | Early Payment -> Early Payment
+7,763 cases | 18.00 mean events | Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment
+6,417 cases | 14.00 mean events | Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment
+6,359 cases | 24.00 mean events | Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment
+6,349 cases | 13.00 mean events | Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment
+5,120 cases | 16.00 mean events | Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment
+4,704 cases | 1.00 mean events | On-time Payment
+4,612 cases | 15.00 mean events | Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment
+4,570 cases | 17.00 mean events | Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment
+
+TOP ACTIVITY TRANSITIONS
+========================
+Early Payment -> Early Payment: 6,627,059
+On-time Payment -> On-time Payment: 1,720,770
+Early Payment -> On-time Payment: 1,174,016
+On-time Payment -> Early Payment: 1,127,767
+Early Payment -> Late Payment: 740,139
+Late Payment -> Early Payment: 663,836
+Late Payment -> Late Payment: 229,983
+Late Payment -> On-time Payment: 170,153
+On-time Payment -> Late Payment: 151,099
+
+METHODOLOGICAL NOTES
+====================
+Trace variants are sequences of payment timing categories, not complete loan application workflows.
+Events are ordered by relative payment day, installment number, and installment version.
+The secondary sort fields make ordering reproducible, but do not establish the true order of events with identical payment days.

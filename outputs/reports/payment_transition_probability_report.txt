@@ -1,0 +1,22 @@
+PAYMENT TRANSITION PROBABILITY REPORT
+=====================================
+
+Percentages describe the distribution of observed next payment categories, conditional on the previous category.
+
+Previous activity: Early Payment
+Observed outgoing transitions: 8,541,214
+  Next activity: Early Payment | Count: 6,627,059 | Percentage: 77.59%
+  Next activity: On-time Payment | Count: 1,174,016 | Percentage: 13.75%
+  Next activity: Late Payment | Count: 740,139 | Percentage: 8.67%
+
+Previous activity: On-time Payment
+Observed outgoing transitions: 2,999,636
+  Next activity: On-time Payment | Count: 1,720,770 | Percentage: 57.37%
+  Next activity: Early Payment | Count: 1,127,767 | Percentage: 37.60%
+  Next activity: Late Payment | Count: 151,099 | Percentage: 5.04%
+
+Previous activity: Late Payment
+Observed outgoing transitions: 1,063,972
+  Next activity: Early Payment | Count: 663,836 | Percentage: 62.39%
+  Next activity: Late Payment | Count: 229,983 | Percentage: 21.62%
+  Next activity: On-time Payment | Count: 170,153 | Percentage: 15.99%

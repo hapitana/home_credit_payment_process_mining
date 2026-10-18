@@ -1,0 +1,17 @@
+PAYMENT EVENT LOG BUILD REPORT
+==============================
+
+Event count: 13,602,496
+Case count: 997,674
+Customer count: 339,578
+Activity count: 3
+Missing payment amounts: 0
+Missing timestamps: 0
+
+METHODOLOGICAL NOTES
+====================
+Each event represents a recorded payment with a non-missing payment date.
+Case ID is SK_ID_PREV, representing a previous loan.
+Repeated installment keys are retained.
+The timestamp is derived from a relative day count using an artificial anchor date; it is not an actual calendar date.
+Payment timing categories are based on the difference between payment day and due day.

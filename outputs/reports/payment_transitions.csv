@@ -1,0 +1,10 @@
+previous_activity,activity,transition_count
+Early Payment,Early Payment,6627059
+On-time Payment,On-time Payment,1720770
+Early Payment,On-time Payment,1174016
+On-time Payment,Early Payment,1127767
+Early Payment,Late Payment,740139
+Late Payment,Early Payment,663836
+Late Payment,Late Payment,229983
+Late Payment,On-time Payment,170153
+On-time Payment,Late Payment,151099

@@ -1,0 +1,24 @@
+# Raw datasets
+data/raw/
+
+# Generated and potentially large data
+data/processed/*.parquet
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+.venv/
+venv/
+
+# Environment variables and secrets
+.env
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# Large generated reports
+outputs/reports/payment_trace_variants.csv
+outputs/reports/payment_case_duration_summary.csv

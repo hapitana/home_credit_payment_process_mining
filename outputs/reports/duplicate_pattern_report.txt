@@ -1,0 +1,16 @@
+DUPLICATE INSTALLMENT PATTERN REPORT
+====================================
+
+duplicate_key_groups: 640,905
+groups_with_two_records: 629,210
+groups_with_more_than_two_records: 11,695
+groups_with_multiple_due_dates: 0
+groups_with_multiple_payment_dates: 640,238
+groups_with_multiple_scheduled_amounts: 0
+groups_with_multiple_payment_amounts: 638,836
+
+INTERPRETATION
+==============
+Repeated keys are not automatically treated as erroneous duplicate records.
+Different payment dates or payment amounts may indicate multiple records associated with one installment key.
+Further inspection is required before defining deduplication rules.

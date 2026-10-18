@@ -1,0 +1,17 @@
+EXTREME CASE CHARACTERISTICS REPORT
+===================================
+
+This report describes the exported cases with the longest observed payment spans.
+It does not establish why these cases have long spans.
+
+Cases reviewed: 100
+Minimum observed span: 2,922 days
+Median observed span: 2,924 days
+Maximum observed span: 3,339 days
+Mean events per case: 131.29
+Median events per case: 126.50
+Maximum events per case: 204
+Mean activity types per case: 2.62
+Cases with at least one late payment event: 64
+
+The reviewed sample is selected by observed span and is not representative of all loan cases.

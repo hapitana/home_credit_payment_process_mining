@@ -1,0 +1,15 @@
+PREVIOUS LOAN CASE AUDIT
+========================
+
+Unique loans: 997,752
+Mean records per loan: 13.64
+Median records per loan: 10.00
+Maximum records per loan: 293
+Loans with one record: 28,097
+Loans with multiple records: 969,655
+Loans linked to multiple customers: 0
+
+REPEATED INSTALLMENT KEY AUDIT
+==============================
+Duplicate key groups: 640,905
+Extra records in duplicate groups: 653,483

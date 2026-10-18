@@ -1,0 +1,24 @@
+PAYMENT CASE DURATION AND PATTERN REPORT
+========================================
+
+The observed span is the difference between the first and last recorded payment days within each loan case.
+Payment days are relative day values, not actual calendar dates.
+A late payment event is a recorded event with payment_delay_days greater than zero.
+
+Total loan cases: 997,674
+Mean events per case: 13.63
+Median events per case: 10.00
+Maximum events in a case: 293
+Mean observed span in days: 325.86
+Median observed span in days: 246.00
+Maximum observed span in days: 3,339
+Cases with at least one late payment event: 313,271
+Cases with multiple activity types: 450,841
+Cases linked to more than one customer: 0
+
+Event-count distribution:
+  1 event: 28,098 cases
+  11-20 events: 293,449 cases
+  2-5 events: 186,217 cases
+  6-10 events: 354,292 cases
+  More than 20 events: 135,618 cases

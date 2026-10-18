@@ -1,0 +1,10 @@
+previous_activity,activity,transition_count,outgoing_transition_count,transition_percentage
+Early Payment,Early Payment,6627059,8541214,77.58919282434557
+Early Payment,On-time Payment,1174016,8541214,13.74530599514308
+Early Payment,Late Payment,740139,8541214,8.665501180511342
+Late Payment,Early Payment,663836,1063972,62.392243404901635
+Late Payment,Late Payment,229983,1063972,21.615512438297248
+Late Payment,On-time Payment,170153,1063972,15.992244156801119
+On-time Payment,On-time Payment,1720770,2999636,57.365960403195594
+On-time Payment,Early Payment,1127767,2999636,37.596795077802774
+On-time Payment,Late Payment,151099,2999636,5.037244519001638
