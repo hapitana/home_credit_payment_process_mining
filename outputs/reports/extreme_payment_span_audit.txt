@@ -10,8 +10,8 @@ Median observed span: 246 days
 75th percentile: 337 days
 90th percentile: 607 days
 95th percentile: 779 days
-99th percentile: 2,685 days
-Maximum observed span: 3,339 days
-Cases at or above the 99th percentile threshold: 100
+99th percentile threshold: 2,685 days
+Cases at or above the 99th percentile threshold: 9,998
+Extreme cases exported for review: 100
 
 The exported CSV contains up to 100 cases with the longest observed spans.

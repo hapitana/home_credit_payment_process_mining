@@ -1,7 +1,7 @@
 EXTREME CASE CHARACTERISTICS REPORT
 ===================================
 
-This report describes the exported cases with the longest observed payment spans.
+This report summarizes the exported cases with the longest observed payment spans.
 It does not establish why these cases have long spans.
 
 Cases reviewed: 100

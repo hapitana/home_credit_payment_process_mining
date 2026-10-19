@@ -31,9 +31,12 @@ span_stats = case_summary.select(
 stats = span_stats.row(0, named=True)
 p99 = stats["p99_span_days"]
 
+cases_at_or_above_p99 = case_summary.filter(
+    pl.col("observed_span_days") >= p99
+)
+
 extreme_cases = (
-    case_summary
-    .filter(pl.col("observed_span_days") >= p99)
+    cases_at_or_above_p99
     .sort("observed_span_days", descending=True)
     .head(100)
 )
@@ -53,9 +56,9 @@ report_lines = [
     f"75th percentile: {stats['p75_span_days']:,.0f} days",
     f"90th percentile: {stats['p90_span_days']:,.0f} days",
     f"95th percentile: {stats['p95_span_days']:,.0f} days",
-    f"99th percentile: {p99:,.0f} days",
-    f"Maximum observed span: {stats['maximum_span_days']:,.0f} days",
-    f"Cases at or above the 99th percentile threshold: {extreme_cases.height:,}",
+    f"99th percentile threshold: {p99:,.0f} days",
+    f"Cases at or above the 99th percentile threshold: {cases_at_or_above_p99.height:,}",
+    f"Extreme cases exported for review: {extreme_cases.height:,}",
     "",
     "The exported CSV contains up to 100 cases with the longest observed spans.",
 ]
@@ -63,10 +66,8 @@ report_lines = [
 report_path.write_text("\n".join(report_lines), encoding="utf-8")
 
 print("\nExtreme span audit completed.")
-print(
-    span_stats.with_columns(
-        pl.all().exclude("total_cases").round(2)
-    )
-)
+print(span_stats.with_columns(pl.all().exclude("total_cases").round(2)))
+print(f"Cases at or above the P99 threshold: {cases_at_or_above_p99.height:,}")
+print(f"Extreme cases exported: {extreme_cases.height:,}")
 print(f"Extreme cases saved to: {output_path}")
 print(f"Audit report saved to: {report_path}")

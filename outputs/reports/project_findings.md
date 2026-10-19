@@ -2,172 +2,181 @@
 
 ## 1. Project Overview
 
-This project examines recorded payment behavior using the Home Credit dataset. It applies event-log construction, case-level profiling, trace analysis, transition analysis, and descriptive duration analysis.
+This project applies process-mining concepts to Home Credit payment records. It examines observed payment-event sequences, transitions between payment-timing categories, case-level event counts, and the observed span between recorded payment events.
 
-The current scope focuses on payment records from installments_payments.csv. It does not reconstruct the complete loan lifecycle from application through approval, disbursement, and closure.
+The analysis is descriptive. It identifies patterns in the available records and does not establish causal relationships or determine whether a loan was ultimately repaid successfully.
 
-## 2. Data and Event Log
+## 2. Research Questions
 
-- Loan cases represented in the event log: *997,674*
-- Recorded payment events: *13,602,496*
-- Mean events per case: *13.63*
-- Median events per case: *10*
-- Maximum events in a case: *293*
+1. What payment-timing patterns appear in the recorded loan cases?
+2. How frequently do Early, On-time, and Late Payment events follow one another?
+3. How many payment events are recorded per loan case, and how long is the observed span between its first and last recorded payment?
+4. What characteristics appear among cases with exceptionally long observed payment spans?
 
-The case identifier is SK_ID_PREV, representing a previous loan. The customer identifier is SK_ID_CURR. Recorded events are categorized as Early Payment, On-time Payment, or Late Payment using the difference between payment-entry days and scheduled installment days.
+## 3. Dataset and Event Log
 
-The event-log timestamp is an artificial date derived from relative payment days. It preserves event ordering and is not an actual calendar date.
+The project uses three Home Credit dataset files:
 
-## 3. Payment Event Distribution
+- `application_train.csv`: customer application and target information.
+- `previous_application.csv`: historical loan application records.
+- `installments_payments.csv`: installment and payment records.
 
-| Event-count group | Loan cases |
-|---|---:|
+The event log is built from installment-payment records with a non-missing payment-entry day. Each case is identified by `SK_ID_PREV`, representing a previous loan, and each event is classified according to the difference between the payment-entry day and the scheduled installment day.
+
+| Measure | Result |
+| --- | --- |
+| Recorded payment events | 13,602,496 |
+| Loan cases | 997,674 |
+| Mean events per case | 13.63 |
+| Median events per case | 10.00 |
+| Maximum events in one case | 293 |
+
+## 4. Methodology
+
+### 4.1 Payment-event classification
+
+Payment delay is calculated as:
+
+`payment_delay_days = DAYS_ENTRY_PAYMENT - DAYS_INSTALMENT`
+
+- **Early Payment:** payment-entry day precedes the scheduled day.
+- **On-time Payment:** payment-entry day equals the scheduled day.
+- **Late Payment:** payment-entry day follows the scheduled day.
+
+### 4.2 Event ordering and transitions
+
+Events are ordered within each loan case using the recorded payment-entry day. Transition counts describe adjacent recorded events within the same case. Because an installment can have multiple payment records, a transition does not necessarily represent movement between two distinct installments.
+
+Transition probabilities are calculated conditionally on the previous activity. For each previous activity, the probability of a next activity is its transition count divided by the total outgoing transitions from that previous activity.
+
+### 4.3 Observed payment span
+
+Observed payment span is calculated as the last recorded payment day minus the first recorded payment day for each case. The event timestamps use an artificial reference date to preserve relative day ordering. They are not actual calendar dates.
+
+The observed span must not be interpreted as confirmed loan tenure or the complete duration of a loan.
+
+## 5. Key Findings
+
+### 5.1 Case-level payment patterns
+
+| Measure | Result |
+| --- | --- |
+| Total loan cases | 997,674 |
+| Total recorded events | 13,602,496 |
+| Mean events per case | 13.63 |
+| Median events per case | 10.00 |
+| Maximum events per case | 293 |
+| Cases with at least one late event | 313,271 |
+| Cases with multiple activity types | 450,841 |
+| Cases with only one activity type | 546,833 |
+| Cases linked to multiple customers | 0 |
+
+The event-count distribution is shown below.
+
+| Events per Case | Number of Cases |
+| --- | --- |
 | 1 event | 28,098 |
 | 2-5 events | 186,217 |
 | 6-10 events | 354,292 |
 | 11-20 events | 293,449 |
-| More than 20 events | 135,618 |
+| >20 events | 135,618 |
 
-Event counts should not be interpreted as completed installment counts, because a single installment can have multiple recorded payment entries.
+### 5.2 Observed payment spans
 
-## 4. Payment Transition Analysis
+| Measure | Observed Span (Days) |
+| --- | --- |
+| Mean | 325.86 |
+| Median | 246.00 |
+| 75th percentile | 337.00 |
+| 90th percentile | 607.00 |
+| 95th percentile | 779.00 |
+| 99th percentile threshold | 2,685.00 |
+| Maximum | 3,339 |
+| Cases at or above the P99 threshold | 9,998 |
 
-Transition percentages describe the distribution of the next recorded payment category conditional on the previous recorded category. They are descriptive transition frequencies, not causal effects or customer-level default probabilities.
+The upper tail contains cases whose recorded payment events span substantially longer periods than those of most cases. These cases are candidates for further data-quality and process investigation, not automatic evidence of delinquency or default.
 
+### 5.3 Payment-event transitions
 
-### Transitions following Early Payment
+The most frequent adjacent-event transitions are listed below.
 
-| Next activity | Observed transitions | Percentage |
-|---|---:|---:|
-| Early Payment | 6,627,059 | 77.59% |
-| On-time Payment | 1,174,016 | 13.75% |
-| Late Payment | 740,139 | 8.67% |
+| Previous Activity | Next Activity | Transition Count |
+| --- | --- | --- |
+| Early Payment | Early Payment | 6,627,059 |
+| On-time Payment | On-time Payment | 1,720,770 |
+| Early Payment | On-time Payment | 1,174,016 |
+| On-time Payment | Early Payment | 1,127,767 |
+| Early Payment | Late Payment | 740,139 |
+| Late Payment | Early Payment | 663,836 |
+| Late Payment | Late Payment | 229,983 |
+| Late Payment | On-time Payment | 170,153 |
+| On-time Payment | Late Payment | 151,099 |
 
-### Transitions following On-time Payment
+Transition probabilities conditional on the previous activity are shown below.
 
-| Next activity | Observed transitions | Percentage |
-|---|---:|---:|
-| On-time Payment | 1,720,770 | 57.37% |
-| Early Payment | 1,127,767 | 37.60% |
-| Late Payment | 151,099 | 5.04% |
+| Previous Activity | Next Activity | Transition Count | Transition Probability (%) |
+| --- | --- | --- | --- |
+| Early Payment | Early Payment | 6,627,059 | 77.59 |
+| Early Payment | On-time Payment | 1,174,016 | 13.75 |
+| Early Payment | Late Payment | 740,139 | 8.67 |
+| Late Payment | Early Payment | 663,836 | 62.39 |
+| Late Payment | Late Payment | 229,983 | 21.62 |
+| Late Payment | On-time Payment | 170,153 | 15.99 |
+| On-time Payment | On-time Payment | 1,720,770 | 57.37 |
+| On-time Payment | Early Payment | 1,127,767 | 37.60 |
+| On-time Payment | Late Payment | 151,099 | 5.04 |
 
-### Transitions following Late Payment
+These results describe observed sequences in the event log. They should not be interpreted as causal effects or as probabilities of future customer behavior.
 
-| Next activity | Observed transitions | Percentage |
-|---|---:|---:|
-| Early Payment | 663,836 | 62.39% |
-| Late Payment | 229,983 | 21.62% |
-| On-time Payment | 170,153 | 15.99% |
+### 5.4 Extreme observed-span cases
 
-## 5. Observed Payment Spans
+| Measure | Result |
+| --- | --- |
+| Cases reviewed | 100 |
+| Minimum span in reviewed cases (days) | 2,922 |
+| Median span in reviewed cases (days) | 2,924.00 |
+| Maximum span in reviewed cases (days) | 3,339 |
+| Mean events per reviewed case | 131.29 |
+| Median events per reviewed case | 126.50 |
+| Maximum events in a reviewed case | 204 |
+| Mean activity types per reviewed case | 2.62 |
+| Reviewed cases with late events | 64 |
 
-| Metric | Result |
-|---|---:|
-| Median observed span | 246 days |
-| 75th percentile | 337 days |
-| 90th percentile | 607 days |
-| 95th percentile | 779 days |
-| 99th percentile | 2,685 days |
-| Maximum observed span | 3,339 days |
+The extreme-case sample contains up to 100 cases selected from the longest observed spans. It is a targeted sample and is not representative of the full population of loan cases.
 
-Observed span is the difference between the first and last recorded payment days in a case. It is not confirmed loan tenure or the time between actual loan opening and closure.
+## 6. Interpretation and Limitations
 
-## 6. Late Payment Events
+The analysis provides a descriptive view of recorded payment behavior. Several limitations are important:
 
-- Cases with at least one late payment event: *313,271*
-- Share of all cases: *31.40%*
-- Cases containing multiple payment activity types: **450,841 (45.19%)**
-- Cases linked to multiple customer identifiers: *0*
+1. **Recorded events are not necessarily distinct installments.** Repeated records may reflect multiple payment entries associated with one installment. They should not be removed without a well-supported business rule.
+2. **The event log is based on available payment records.** Cases with no non-missing payment-entry day are not represented in the event log.
+3. **Relative days are not actual calendar dates.** The artificial timestamp is used only to order events and does not identify the real-world date of a payment.
+4. **Observed span is not confirmed loan tenure.** The first and last recorded events may not correspond to loan origination and final settlement.
+5. **Payment timing alone does not establish default.** An observed late event is not sufficient to determine credit risk, loss, or final repayment outcome.
+6. **The analysis is descriptive rather than causal.** The results do not demonstrate why payment timing occurs or whether one event causes another.
+7. **The extreme-case review is selective.** Its findings should not be generalized to all cases.
 
-A late payment event is a recorded payment with payment_delay_days > 0. This does not establish that the customer defaulted or that the loan was classified as non-performing.
+## 7. Reproducibility
 
-## 7. Extreme Case Audit
+The analysis scripts are located in the `src/` directory. Input datasets are expected in `data/raw/`, derived event data in `data/processed/`, and generated reports and figures in `outputs/`.
 
-- Cases reviewed in the extreme-span sample: *100*
-- Median span within that sample: *2,924 days*
-- Maximum span within that sample: *3,339 days*
-- Median events per case in that sample: *126.5*
-- Maximum events per case in that sample: *204*
-- Sample cases with at least one late payment event: *64*
+Install the pinned dependencies from the project root:
 
-The extreme-case sample was selected by observed payment span. It is not representative of the full dataset, and the analysis does not establish why these cases have long spans.
+```powershell
+python -m pip install -r requirements.txt
+```
 
-## 8. Trace Analysis
+Run the project scripts in numerical order to reproduce the analysis. The raw datasets and generated Parquet event log are excluded from version control; users must obtain the original dataset files separately and place them in the expected directory.
 
-- Cases included in trace analysis: *997,674*
-- Unique observed trace variants: *196,042*
-- Mean events per case: *13.63*
-- Median events per case: *10.00*
+## 8. Future Improvements
 
-The following table lists up to ten frequent trace variants. Each trace is a sequence of recorded payment categories within a loan case.
+- Use a process-mining library to discover and visualize process models.
+- Investigate repeated installment records and partial-payment patterns.
+- Compare payment-event behavior across customer and loan segments.
+- Evaluate alternative case identifiers and event definitions.
+- Add sensitivity checks for missing payment records and extreme cases.
+- Explore predictive modeling only after defining a defensible target and a leakage-resistant validation strategy.
 
-| Cases | Mean events | Payment-category sequence |
-|---:|---:|---|
-| 87,551 | 6.00 | Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment |
-| 57,017 | 12.00 | Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment |
-| 52,811 | 4.00 | Early Payment -> Early Payment -> Early Payment -> Early Payment |
-| 52,492 | 10.00 | Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment |
-| 42,420 | 5.00 | Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment |
-| 30,526 | 8.00 | Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment |
-| 27,549 | 3.00 | Early Payment -> Early Payment -> Early Payment |
-| 26,750 | 9.00 | Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment |
-| 26,148 | 7.00 | Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment -> Early Payment |
-| 22,897 | 1.00 | Early Payment |
+## 9. Conclusion
 
-The most frequent traces are dominated by Early Payment categories. These sequences describe the recorded event log and should not be interpreted as full loan workflows or proof of customer behavior across all installments.
-
-### Most Frequent Adjacent Activity Transitions
-
-| Adjacent activity transition | Count |
-|---|---:|
-| Early Payment -> Early Payment | 6,627,059 |
-| On-time Payment -> On-time Payment | 1,720,770 |
-| Early Payment -> On-time Payment | 1,174,016 |
-| On-time Payment -> Early Payment | 1,127,767 |
-| Early Payment -> Late Payment | 740,139 |
-| Late Payment -> Early Payment | 663,836 |
-| Late Payment -> Late Payment | 229,983 |
-| Late Payment -> On-time Payment | 170,153 |
-| On-time Payment -> Late Payment | 151,099 |
-
-Events are ordered by relative payment day, installment number, and installment version. The secondary sort fields make ordering reproducible, but do not establish the true order of events with identical payment days. Repeated payment entries may mean that adjacent events do not correspond to distinct installments.
-
-## 9. Limitations
-
-1. The event log focuses on payment records rather than the full loan lifecycle.
-2. Event timestamps encode relative days and are not actual calendar dates.
-3. Multiple records may exist for one installment, including partial or multiple payment entries.
-4. Payment categories are derived from recorded timing differences and should not be treated as formal credit-risk or default labels.
-5. Transition percentages are descriptive and do not imply causation.
-6. Extreme cases require contextual investigation; they should not be removed without a defensible data-quality reason.
-
-## 10. Reproducibility and Outputs
-
-Key outputs include:
-
-- data/processed/payment_event_log.parquet
-- outputs/reports/payment_trace_variants.csv
-- outputs/reports/payment_transitions.csv
-- outputs/reports/payment_transition_probabilities.csv
-- outputs/reports/payment_case_duration_summary.csv
-- outputs/reports/extreme_payment_span_cases.csv
-- outputs/figures/payment_events_per_case.png
-- outputs/figures/observed_payment_span_distribution.png
-
-## 11. Conclusion
-
-The analysis demonstrates how payment-level data can be transformed into an event log and used to examine case variation, payment-category transitions, observed spans, and extreme cases. The findings are exploratory and descriptive. Further work should validate installment semantics, examine payment sequences at the installment level, and extend the event log only where reliable lifecycle events are available.
-
-## Appendix: Extreme-Span Audit
-
-- *Total cases:* 997,674
-- *Minimum observed span:* 0 days
-- *Median observed span:* 246 days
-- *75th percentile:* 337 days
-- *90th percentile:* 607 days
-- *95th percentile:* 779 days
-- *99th percentile:* 2,685 days
-- *Maximum observed span:* 3,339 days
-- *Cases at or above the 99th percentile threshold:* 100
-The exported CSV contains up to 100 cases with the longest observed spans.
-
+This project demonstrates a reproducible workflow for constructing a payment-event log, validating loan cases, examining event sequences, estimating transition probabilities, and auditing extreme observed spans. The findings are useful as exploratory evidence for further process-mining research, while the limitations highlight the need for careful event definitions and business interpretation.

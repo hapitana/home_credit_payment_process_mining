@@ -26,18 +26,21 @@ characteristics = extreme_cases.select(
     pl.col("event_count").median().alias("median_events_per_case"),
     pl.col("event_count").max().alias("maximum_events_per_case"),
     pl.col("activity_type_count").mean().alias("mean_activity_types"),
-    pl.col("has_late_payment_event").sum().alias("cases_with_late_events"),
+    pl.col("has_late_payment_event")
+    .cast(pl.Int64)
+    .sum()
+    .alias("cases_with_late_events"),
 )
 
-extreme_cases.write_csv(output_path)
-
 stats = characteristics.row(0, named=True)
+
+characteristics.write_csv(output_path)
 
 report_lines = [
     "EXTREME CASE CHARACTERISTICS REPORT",
     "===================================",
     "",
-    "This report describes the exported cases with the longest observed payment spans.",
+    "This report summarizes the exported cases with the longest observed payment spans.",
     "It does not establish why these cases have long spans.",
     "",
     f"Cases reviewed: {stats['cases_reviewed']:,}",
@@ -53,9 +56,10 @@ report_lines = [
     "The reviewed sample is selected by observed span and is not representative of all loan cases.",
 ]
 
-report_path.write_text("\n".join(report_lines), encoding="utf-8")
+report_path.write_text("\n".join(report_lines) + "\n", encoding="utf-8")
 
 print("\nExtreme case inspection completed.")
 print(characteristics)
-print(f"Case characteristics saved to: {output_path}")
+print(f"Case details retained at: {input_path}")
+print(f"Summary saved to: {output_path}")
 print(f"Report saved to: {report_path}")

@@ -1,457 +1,522 @@
 from pathlib import Path
-import re
 
 import polars as pl
 
 
-base_dir = Path(__file__).resolve().parents[1]
-report_dir = base_dir / "outputs" / "reports"
-figure_dir = base_dir / "outputs" / "figures"
+project_root = Path(__file__).resolve().parents[1]
+reports_dir = project_root / "outputs" / "reports"
+output_path = reports_dir / "project_findings.md"
 
-case_summary_path = report_dir / "payment_case_duration_summary.csv"
-transition_path = report_dir / "payment_transition_probabilities.csv"
-trace_analysis_path = report_dir / "payment_trace_analysis.txt"
-extreme_audit_path = report_dir / "extreme_payment_span_audit.txt"
-extreme_characteristics_path = report_dir / "extreme_case_characteristics.csv"
+case_summary_path = reports_dir / "payment_case_duration_summary.csv"
+transition_path = reports_dir / "payment_transition_probabilities.csv"
+extreme_summary_path = reports_dir / "extreme_case_characteristics.csv"
+transition_counts_path = reports_dir / "payment_transitions.csv"
 
-output_path = report_dir / "project_findings.md"
 
-required_files = [
-    case_summary_path,
-    transition_path,
-    trace_analysis_path,
-    extreme_audit_path,
-    extreme_characteristics_path,
-]
+def format_value(value):
+    if value is None:
+        return "N/A"
 
-missing_files = [path for path in required_files if not path.exists()]
+    if isinstance(value, bool):
+        return "Yes" if value else "No"
 
-if missing_files:
-    missing_list = "\n".join(str(path) for path in missing_files)
-    raise FileNotFoundError(
-        f"Required analysis outputs are missing:\n{missing_list}"
-    )
+    if isinstance(value, int):
+        return f"{value:,}"
 
-print("Loading existing analysis outputs...")
+    if isinstance(value, float):
+        return f"{value:,.2f}"
 
-case_summary = pl.read_csv(case_summary_path)
-transitions = pl.read_csv(transition_path)
-extreme_cases = pl.read_csv(extreme_characteristics_path)
+    return str(value).replace("|", "\\|")
 
-case_stats = case_summary.select(
-    pl.len().alias("total_cases"),
-    pl.col("event_count").sum().alias("total_events"),
-    pl.col("event_count").mean().alias("mean_events"),
-    pl.col("event_count").median().alias("median_events"),
-    pl.col("event_count").max().alias("maximum_events"),
-    pl.col("observed_span_days").median().alias("median_span"),
-    pl.col("observed_span_days").quantile(0.75).alias("p75_span"),
-    pl.col("observed_span_days").quantile(0.90).alias("p90_span"),
-    pl.col("observed_span_days").quantile(0.95).alias("p95_span"),
-    pl.col("observed_span_days").quantile(0.99).alias("p99_span"),
-    pl.col("observed_span_days").max().alias("maximum_span"),
-    pl.col("has_late_payment_event").sum().alias("late_cases"),
-    (pl.col("activity_type_count") > 1)
-    .sum()
-    .alias("multiple_activity_cases"),
-    (pl.col("customer_count") > 1)
-    .sum()
-    .alias("multiple_customer_cases"),
-)
 
-stats = case_stats.row(0, named=True)
+def markdown_table(headers, rows):
+    lines = [
+        "| " + " | ".join(headers) + " |",
+        "| " + " | ".join(["---"] * len(headers)) + " |",
+    ]
 
-total_cases = stats["total_cases"]
-total_events = stats["total_events"]
-late_cases = stats["late_cases"]
+    for row in rows:
+        formatted_row = [format_value(value) for value in row]
+        lines.append("| " + " | ".join(formatted_row) + " |")
 
-late_case_percentage = late_cases / total_cases * 100
-multiple_activity_percentage = (
-    stats["multiple_activity_cases"] / total_cases * 100
-)
+    return "\n".join(lines)
 
-event_group_order = [
-    "1 event",
-    "2-5 events",
-    "6-10 events",
-    "11-20 events",
-    "More than 20 events",
-]
 
-event_groups = (
-    case_summary
-    .select(
-        pl.when(pl.col("event_count") == 1)
-        .then(pl.lit("1 event"))
-        .when(pl.col("event_count") <= 5)
-        .then(pl.lit("2-5 events"))
-        .when(pl.col("event_count") <= 10)
-        .then(pl.lit("6-10 events"))
-        .when(pl.col("event_count") <= 20)
-        .then(pl.lit("11-20 events"))
-        .otherwise(pl.lit("More than 20 events"))
-        .alias("event_group")
-    )
-    .group_by("event_group")
-    .len()
-    .with_columns(
-        pl.col("event_group")
-        .replace_strict(
-            {
-                name: index
-                for index, name in enumerate(event_group_order)
-            }
+def require_columns(dataframe, required_columns, filename):
+    missing_columns = [
+        column
+        for column in required_columns
+        if column not in dataframe.columns
+    ]
+
+    if missing_columns:
+        missing_text = ", ".join(missing_columns)
+        raise ValueError(
+            f"Missing required columns in {filename}: {missing_text}"
         )
-        .alias("group_order")
-    )
-    .sort("group_order")
-)
 
-event_group_lines = [
-    f"| {row['event_group']} | {row['len']:,} |"
-    for row in event_groups.iter_rows(named=True)
-]
 
-transition_order = [
-    "Early Payment",
-    "On-time Payment",
-    "Late Payment",
-]
+def build_event_distribution(case_summary):
+    event_distribution = [
+        ("1 event", 1, 1),
+        ("2-5 events", 2, 5),
+        ("6-10 events", 6, 10),
+        ("11-20 events", 11, 20),
+        (">20 events", 21, None),
+    ]
 
-transition_lines = []
+    rows = []
 
-for previous_activity in transition_order:
-    subset = (
-        transitions
-        .filter(pl.col("previous_activity") == previous_activity)
-        .sort("transition_count", descending=True)
-    )
+    for label, lower_bound, upper_bound in event_distribution:
+        if upper_bound is None:
+            count = case_summary.filter(
+                pl.col("event_count") >= lower_bound
+            ).height
+        else:
+            count = case_summary.filter(
+                (pl.col("event_count") >= lower_bound)
+                & (pl.col("event_count") <= upper_bound)
+            ).height
 
-    if subset.is_empty():
-        continue
+        rows.append((label, count))
 
-    transition_lines.extend(
+    return rows
+
+
+def main():
+    required_files = [
+        case_summary_path,
+        transition_path,
+        extreme_summary_path,
+        transition_counts_path,
+    ]
+
+    missing_files = [
+        str(path)
+        for path in required_files
+        if not path.exists()
+    ]
+
+    if missing_files:
+        missing_text = "\n".join(missing_files)
+        raise FileNotFoundError(
+            "Required input files were not found:\n" + missing_text
+        )
+
+    case_summary = pl.read_csv(case_summary_path)
+    transition_probabilities = pl.read_csv(transition_path)
+    extreme_summary = pl.read_csv(extreme_summary_path)
+    transition_counts = pl.read_csv(transition_counts_path)
+
+    require_columns(
+        case_summary,
         [
-            f"\n### Transitions following {previous_activity}",
-            "",
-            "| Next activity | Observed transitions | Percentage |",
-            "|---|---:|---:|",
-        ]
+            "case_id",
+            "event_count",
+            "customer_count",
+            "first_payment_day",
+            "last_payment_day",
+            "maximum_delay_days",
+            "mean_delay_days",
+            "late_event_count",
+            "activity_type_count",
+            "observed_span_days",
+            "has_late_payment_event",
+        ],
+        case_summary_path.name,
     )
 
-    for row in subset.iter_rows(named=True):
-        transition_lines.append(
-            f"| {row['activity']} | "
-            f"{row['transition_count']:,} | "
-            f"{row['transition_percentage']:.2f}% |"
-        )
-
-trace_text = trace_analysis_path.read_text(encoding="utf-8").strip()
-extreme_audit_text = extreme_audit_path.read_text(
-    encoding="utf-8"
-).strip()
-
-trace_variant_pattern = re.compile(
-    r"^([\d,]+) cases \| ([\d.]+) mean events \| (.+)$"
-)
-
-trace_variants = []
-
-in_top_variants = False
-
-for line in trace_text.splitlines():
-    stripped_line = line.strip()
-
-    if stripped_line == "TOP 20 TRACE VARIANTS":
-        in_top_variants = True
-        continue
-
-    if stripped_line == "TOP ACTIVITY TRANSITIONS":
-        in_top_variants = False
-        continue
-
-    if not in_top_variants:
-        continue
-
-    match = trace_variant_pattern.match(stripped_line)
-
-    if match:
-        trace_variants.append(
-            {
-                "cases": int(match.group(1).replace(",", "")),
-                "mean_events": float(match.group(2)),
-                "trace": match.group(3),
-            }
-        )
-
-trace_table_lines = [
-    "| Cases | Mean events | Payment-category sequence |",
-    "|---:|---:|---|",
-]
-
-for variant in trace_variants[:10]:
-    trace_table_lines.append(
-        f"| {variant['cases']:,} | "
-        f"{variant['mean_events']:.2f} | "
-        f"{variant['trace']} |"
+    require_columns(
+        transition_probabilities,
+        [
+            "previous_activity",
+            "activity",
+            "transition_count",
+            "outgoing_transition_count",
+            "transition_percentage",
+        ],
+        transition_path.name,
     )
 
-trace_summary = {}
+    require_columns(
+        extreme_summary,
+        [
+            "cases_reviewed",
+            "minimum_span_days",
+            "median_span_days",
+            "maximum_span_days",
+            "mean_events_per_case",
+            "median_events_per_case",
+            "maximum_events_per_case",
+            "mean_activity_types",
+            "cases_with_late_events",
+        ],
+        extreme_summary_path.name,
+    )
 
-for line in trace_text.splitlines():
-    stripped_line = line.strip()
+    require_columns(
+        transition_counts,
+        [
+            "previous_activity",
+            "activity",
+            "transition_count",
+        ],
+        transition_counts_path.name,
+    )
 
-    for label in [
-        "Total cases",
-        "Unique trace variants",
-        "Mean events per case",
-        "Median events per case",
-    ]:
-        prefix = f"{label}:"
+    total_cases = case_summary.height
+    total_events = int(case_summary["event_count"].sum())
+    mean_events = float(case_summary["event_count"].mean())
+    median_events = float(case_summary["event_count"].median())
+    maximum_events = int(case_summary["event_count"].max())
 
-        if stripped_line.startswith(prefix):
-            trace_summary[label] = stripped_line[len(prefix):].strip()
+    mean_span = float(case_summary["observed_span_days"].mean())
+    median_span = float(case_summary["observed_span_days"].median())
+    maximum_span = int(case_summary["observed_span_days"].max())
 
-transition_count_pattern = re.compile(r"^(.+): ([\d,]+)$")
-trace_transition_counts = []
+    cases_with_late_events = case_summary.filter(
+        pl.col("has_late_payment_event")
+    ).height
 
-in_top_transitions = False
+    cases_with_multiple_activities = case_summary.filter(
+        pl.col("activity_type_count") > 1
+    ).height
 
-for line in trace_text.splitlines():
-    stripped_line = line.strip()
+    cases_with_single_activity = case_summary.filter(
+        pl.col("activity_type_count") == 1
+    ).height
 
-    if stripped_line == "TOP ACTIVITY TRANSITIONS":
-        in_top_transitions = True
-        continue
+    multi_customer_cases = case_summary.filter(
+        pl.col("customer_count") > 1
+    ).height
 
-    if stripped_line == "METHODOLOGICAL NOTES":
-        in_top_transitions = False
-        continue
+    span_quantiles = case_summary.select(
+        pl.col("observed_span_days").quantile(0.75).alias("p75"),
+        pl.col("observed_span_days").quantile(0.90).alias("p90"),
+        pl.col("observed_span_days").quantile(0.95).alias("p95"),
+        pl.col("observed_span_days").quantile(0.99).alias("p99"),
+    ).row(0, named=True)
 
-    if not in_top_transitions:
-        continue
+    p75_span = float(span_quantiles["p75"])
+    p90_span = float(span_quantiles["p90"])
+    p95_span = float(span_quantiles["p95"])
+    p99_span = float(span_quantiles["p99"])
 
-    match = transition_count_pattern.match(stripped_line)
+    cases_at_or_above_p99 = case_summary.filter(
+        pl.col("observed_span_days") >= p99_span
+    ).height
 
-    if match:
-        trace_transition_counts.append(
-            (
-                match.group(1),
-                int(match.group(2).replace(",", "")),
-            )
+    event_distribution_rows = build_event_distribution(case_summary)
+
+    activity_counts = (
+        transition_counts
+        .group_by("previous_activity")
+        .agg(
+            pl.col("transition_count").sum().alias("outgoing_transitions")
         )
+        .sort("previous_activity")
+    )
 
-extreme_stats = extreme_cases.select(
-    pl.len().alias("cases_reviewed"),
-    pl.col("observed_span_days").median().alias("median_extreme_span"),
-    pl.col("observed_span_days").max().alias("maximum_extreme_span"),
-    pl.col("event_count").median().alias("median_extreme_events"),
-    pl.col("event_count").max().alias("maximum_extreme_events"),
-    pl.col("has_late_payment_event")
-    .cast(pl.Int64)
-    .sum()
-    .alias("extreme_late_cases"),
-).row(0, named=True)
+    transition_probability_rows = (
+        transition_probabilities
+        .sort(
+            ["previous_activity", "transition_percentage"],
+            descending=[False, True],
+        )
+        .select(
+            "previous_activity",
+            "activity",
+            "transition_count",
+            "transition_percentage",
+        )
+        .iter_rows()
+    )
 
-extreme_audit_lines = []
+    transition_probability_table = markdown_table(
+        [
+            "Previous Activity",
+            "Next Activity",
+            "Transition Count",
+            "Transition Probability (%)",
+        ],
+        list(transition_probability_rows),
+    )
 
-for line in extreme_audit_text.splitlines():
-    stripped_line = line.strip()
+    transition_count_rows = (
+        transition_counts
+        .sort("transition_count", descending=True)
+        .select(
+            "previous_activity",
+            "activity",
+            "transition_count",
+        )
+        .iter_rows()
+    )
 
-    if not stripped_line:
-        continue
+    transition_count_table = markdown_table(
+        [
+            "Previous Activity",
+            "Next Activity",
+            "Transition Count",
+        ],
+        list(transition_count_rows),
+    )
 
-    if set(stripped_line) == {"="}:
-        continue
+    event_distribution_table = markdown_table(
+        ["Events per Case", "Number of Cases"],
+        event_distribution_rows,
+    )
 
-    if stripped_line == "EXTREME PAYMENT SPAN AUDIT":
-        continue
+    extreme = extreme_summary.row(0, named=True)
 
-    if stripped_line.startswith("The exported CSV contains"):
-        extreme_audit_lines.append(stripped_line)
-        continue
+    report_lines = [
+        "# Home Credit Payment Process Mining",
+        "",
+        "## 1. Project Overview",
+        "",
+        "This project applies process-mining concepts to Home Credit payment "
+        "records. It examines observed payment-event sequences, transitions "
+        "between payment-timing categories, case-level event counts, and "
+        "the observed span between recorded payment events.",
+        "",
+        "The analysis is descriptive. It identifies patterns in the available "
+        "records and does not establish causal relationships or determine "
+        "whether a loan was ultimately repaid successfully.",
+        "",
+        "## 2. Research Questions",
+        "",
+        "1. What payment-timing patterns appear in the recorded loan cases?",
+        "2. How frequently do Early, On-time, and Late Payment events follow "
+        "one another?",
+        "3. How many payment events are recorded per loan case, and how long "
+        "is the observed span between its first and last recorded payment?",
+        "4. What characteristics appear among cases with exceptionally long "
+        "observed payment spans?",
+        "",
+        "## 3. Dataset and Event Log",
+        "",
+        "The project uses three Home Credit dataset files:",
+        "",
+        "- `application_train.csv`: customer application and target information.",
+        "- `previous_application.csv`: historical loan application records.",
+        "- `installments_payments.csv`: installment and payment records.",
+        "",
+        "The event log is built from installment-payment records with a "
+        "non-missing payment-entry day. Each case is identified by "
+        "`SK_ID_PREV`, representing a previous loan, and each event is "
+        "classified according to the difference between the payment-entry "
+        "day and the scheduled installment day.",
+        "",
+        markdown_table(
+            ["Measure", "Result"],
+            [
+                ("Recorded payment events", total_events),
+                ("Loan cases", total_cases),
+                ("Mean events per case", mean_events),
+                ("Median events per case", median_events),
+                ("Maximum events in one case", maximum_events),
+            ],
+        ),
+        "",
+        "## 4. Methodology",
+        "",
+        "### 4.1 Payment-event classification",
+        "",
+        "Payment delay is calculated as:",
+        "",
+        "`payment_delay_days = DAYS_ENTRY_PAYMENT - DAYS_INSTALMENT`",
+        "",
+        "- **Early Payment:** payment-entry day precedes the scheduled day.",
+        "- **On-time Payment:** payment-entry day equals the scheduled day.",
+        "- **Late Payment:** payment-entry day follows the scheduled day.",
+        "",
+        "### 4.2 Event ordering and transitions",
+        "",
+        "Events are ordered within each loan case using the recorded "
+        "payment-entry day. Transition counts describe adjacent recorded "
+        "events within the same case. Because an installment can have "
+        "multiple payment records, a transition does not necessarily "
+        "represent movement between two distinct installments.",
+        "",
+        "Transition probabilities are calculated conditionally on the "
+        "previous activity. For each previous activity, the probability "
+        "of a next activity is its transition count divided by the total "
+        "outgoing transitions from that previous activity.",
+        "",
+        "### 4.3 Observed payment span",
+        "",
+        "Observed payment span is calculated as the last recorded payment "
+        "day minus the first recorded payment day for each case. The event "
+        "timestamps use an artificial reference date to preserve relative "
+        "day ordering. They are not actual calendar dates.",
+        "",
+        "The observed span must not be interpreted as confirmed loan tenure "
+        "or the complete duration of a loan.",
+        "",
+        "## 5. Key Findings",
+        "",
+        "### 5.1 Case-level payment patterns",
+        "",
+        markdown_table(
+            ["Measure", "Result"],
+            [
+                ("Total loan cases", total_cases),
+                ("Total recorded events", total_events),
+                ("Mean events per case", mean_events),
+                ("Median events per case", median_events),
+                ("Maximum events per case", maximum_events),
+                ("Cases with at least one late event", cases_with_late_events),
+                (
+                    "Cases with multiple activity types",
+                    cases_with_multiple_activities,
+                ),
+                (
+                    "Cases with only one activity type",
+                    cases_with_single_activity,
+                ),
+                ("Cases linked to multiple customers", multi_customer_cases),
+            ],
+        ),
+        "",
+        "The event-count distribution is shown below.",
+        "",
+        event_distribution_table,
+        "",
+        "### 5.2 Observed payment spans",
+        "",
+        markdown_table(
+            ["Measure", "Observed Span (Days)"],
+            [
+                ("Mean", mean_span),
+                ("Median", median_span),
+                ("75th percentile", p75_span),
+                ("90th percentile", p90_span),
+                ("95th percentile", p95_span),
+                ("99th percentile threshold", p99_span),
+                ("Maximum", maximum_span),
+                ("Cases at or above the P99 threshold", cases_at_or_above_p99),
+            ],
+        ),
+        "",
+        "The upper tail contains cases whose recorded payment events span "
+        "substantially longer periods than those of most cases. These cases "
+        "are candidates for further data-quality and process investigation, "
+        "not automatic evidence of delinquency or default.",
+        "",
+        "### 5.3 Payment-event transitions",
+        "",
+        "The most frequent adjacent-event transitions are listed below.",
+        "",
+        transition_count_table,
+        "",
+        "Transition probabilities conditional on the previous activity are "
+        "shown below.",
+        "",
+        transition_probability_table,
+        "",
+        "These results describe observed sequences in the event log. They "
+        "should not be interpreted as causal effects or as probabilities "
+        "of future customer behavior.",
+        "",
+        "### 5.4 Extreme observed-span cases",
+        "",
+        markdown_table(
+            ["Measure", "Result"],
+            [
+                ("Cases reviewed", int(extreme["cases_reviewed"])),
+                ("Minimum span in reviewed cases (days)", int(extreme["minimum_span_days"])),
+                ("Median span in reviewed cases (days)", float(extreme["median_span_days"])),
+                ("Maximum span in reviewed cases (days)", int(extreme["maximum_span_days"])),
+                ("Mean events per reviewed case", float(extreme["mean_events_per_case"])),
+                ("Median events per reviewed case", float(extreme["median_events_per_case"])),
+                ("Maximum events in a reviewed case", int(extreme["maximum_events_per_case"])),
+                ("Mean activity types per reviewed case", float(extreme["mean_activity_types"])),
+                ("Reviewed cases with late events", int(extreme["cases_with_late_events"])),
+            ],
+        ),
+        "",
+        "The extreme-case sample contains up to 100 cases selected from the "
+        "longest observed spans. It is a targeted sample and is not "
+        "representative of the full population of loan cases.",
+        "",
+        "## 6. Interpretation and Limitations",
+        "",
+        "The analysis provides a descriptive view of recorded payment "
+        "behavior. Several limitations are important:",
+        "",
+        "1. **Recorded events are not necessarily distinct installments.** "
+        "Repeated records may reflect multiple payment entries associated "
+        "with one installment. They should not be removed without a "
+        "well-supported business rule.",
+        "2. **The event log is based on available payment records.** "
+        "Cases with no non-missing payment-entry day are not represented "
+        "in the event log.",
+        "3. **Relative days are not actual calendar dates.** The artificial "
+        "timestamp is used only to order events and does not identify the "
+        "real-world date of a payment.",
+        "4. **Observed span is not confirmed loan tenure.** The first and "
+        "last recorded events may not correspond to loan origination and "
+        "final settlement.",
+        "5. **Payment timing alone does not establish default.** An observed "
+        "late event is not sufficient to determine credit risk, loss, or "
+        "final repayment outcome.",
+        "6. **The analysis is descriptive rather than causal.** The results "
+        "do not demonstrate why payment timing occurs or whether one event "
+        "causes another.",
+        "7. **The extreme-case review is selective.** Its findings should "
+        "not be generalized to all cases.",
+        "",
+        "## 7. Reproducibility",
+        "",
+        "The analysis scripts are located in the `src/` directory. Input "
+        "datasets are expected in `data/raw/`, derived event data in "
+        "`data/processed/`, and generated reports and figures in `outputs/`.",
+        "",
+        "Install the pinned dependencies from the project root:",
+        "",
+        "```powershell",
+        "python -m pip install -r requirements.txt",
+        "```",
+        "",
+        "Run the project scripts in numerical order to reproduce the "
+        "analysis. The raw datasets and generated Parquet event log are "
+        "excluded from version control; users must obtain the original "
+        "dataset files separately and place them in the expected directory.",
+        "",
+        "## 8. Future Improvements",
+        "",
+        "- Use a process-mining library to discover and visualize process models.",
+        "- Investigate repeated installment records and partial-payment patterns.",
+        "- Compare payment-event behavior across customer and loan segments.",
+        "- Evaluate alternative case identifiers and event definitions.",
+        "- Add sensitivity checks for missing payment records and extreme cases.",
+        "- Explore predictive modeling only after defining a defensible target "
+        "and a leakage-resistant validation strategy.",
+        "",
+        "## 9. Conclusion",
+        "",
+        "This project demonstrates a reproducible workflow for constructing "
+        "a payment-event log, validating loan cases, examining event "
+        "sequences, estimating transition probabilities, and auditing "
+        "extreme observed spans. The findings are useful as exploratory "
+        "evidence for further process-mining research, while the limitations "
+        "highlight the need for careful event definitions and business "
+        "interpretation.",
+        "",
+    ]
 
-    if ":" in stripped_line:
-        label, value = stripped_line.split(":", 1)
-        extreme_audit_lines.append(f"- *{label.strip()}:* {value.strip()}")
+    report_text = "\n".join(report_lines)
+    output_path.write_text(report_text, encoding="utf-8")
 
-findings = [
-    "# Home Credit Payment Process Mining",
-    "",
-    "## 1. Project Overview",
-    "",
-    "This project examines recorded payment behavior using the Home Credit "
-    "dataset. It applies event-log construction, case-level profiling, trace "
-    "analysis, transition analysis, and descriptive duration analysis.",
-    "",
-    "The current scope focuses on payment records from "
-    "installments_payments.csv. It does not reconstruct the complete loan "
-    "lifecycle from application through approval, disbursement, and closure.",
-    "",
-    "## 2. Data and Event Log",
-    "",
-    f"- Loan cases represented in the event log: *{total_cases:,}*",
-    f"- Recorded payment events: *{total_events:,}*",
-    f"- Mean events per case: *{stats['mean_events']:.2f}*",
-    f"- Median events per case: *{stats['median_events']:.0f}*",
-    f"- Maximum events in a case: *{stats['maximum_events']:,}*",
-    "",
-    "The case identifier is SK_ID_PREV, representing a previous loan. "
-    "The customer identifier is SK_ID_CURR. Recorded events are categorized "
-    "as Early Payment, On-time Payment, or Late Payment using the difference "
-    "between payment-entry days and scheduled installment days.",
-    "",
-    "The event-log timestamp is an artificial date derived from relative "
-    "payment days. It preserves event ordering and is not an actual calendar "
-    "date.",
-    "",
-    "## 3. Payment Event Distribution",
-    "",
-    "| Event-count group | Loan cases |",
-    "|---|---:|",
-    *event_group_lines,
-    "",
-    "Event counts should not be interpreted as completed installment counts, "
-    "because a single installment can have multiple recorded payment entries.",
-    "",
-    "## 4. Payment Transition Analysis",
-    "",
-    "Transition percentages describe the distribution of the next recorded "
-    "payment category conditional on the previous recorded category. They are "
-    "descriptive transition frequencies, not causal effects or customer-level "
-    "default probabilities.",
-    "",
-    *transition_lines,
-    "",
-    "## 5. Observed Payment Spans",
-    "",
-    "| Metric | Result |",
-    "|---|---:|",
-    f"| Median observed span | {stats['median_span']:,.0f} days |",
-    f"| 75th percentile | {stats['p75_span']:,.0f} days |",
-    f"| 90th percentile | {stats['p90_span']:,.0f} days |",
-    f"| 95th percentile | {stats['p95_span']:,.0f} days |",
-    f"| 99th percentile | {stats['p99_span']:,.0f} days |",
-    f"| Maximum observed span | {stats['maximum_span']:,.0f} days |",
-    "",
-    "Observed span is the difference between the first and last recorded "
-    "payment days in a case. It is not confirmed loan tenure or the time "
-    "between actual loan opening and closure.",
-    "",
-    "## 6. Late Payment Events",
-    "",
-    f"- Cases with at least one late payment event: *{late_cases:,}*",
-    f"- Share of all cases: *{late_case_percentage:.2f}%*",
-    f"- Cases containing multiple payment activity types: "
-    f"**{stats['multiple_activity_cases']:,} "
-    f"({multiple_activity_percentage:.2f}%)**",
-    f"- Cases linked to multiple customer identifiers: "
-    f"*{stats['multiple_customer_cases']:,}*",
-    "",
-    "A late payment event is a recorded payment with "
-    "payment_delay_days > 0. This does not establish that the customer "
-    "defaulted or that the loan was classified as non-performing.",
-    "",
-    "## 7. Extreme Case Audit",
-    "",
-    f"- Cases reviewed in the extreme-span sample: "
-    f"*{extreme_stats['cases_reviewed']:,}*",
-    f"- Median span within that sample: "
-    f"*{extreme_stats['median_extreme_span']:,.0f} days*",
-    f"- Maximum span within that sample: "
-    f"*{extreme_stats['maximum_extreme_span']:,.0f} days*",
-    f"- Median events per case in that sample: "
-    f"*{extreme_stats['median_extreme_events']:,.1f}*",
-    f"- Maximum events per case in that sample: "
-    f"*{extreme_stats['maximum_extreme_events']:,}*",
-    f"- Sample cases with at least one late payment event: "
-    f"*{extreme_stats['extreme_late_cases']:,}*",
-    "",
-    "The extreme-case sample was selected by observed payment span. It is "
-    "not representative of the full dataset, and the analysis does not "
-    "establish why these cases have long spans.",
-    "",
-    "## 8. Trace Analysis",
-    "",
-    f"- Cases included in trace analysis: "
-    f"*{trace_summary.get('Total cases', 'Not available')}*",
-    f"- Unique observed trace variants: "
-    f"*{trace_summary.get('Unique trace variants', 'Not available')}*",
-    f"- Mean events per case: "
-    f"*{trace_summary.get('Mean events per case', 'Not available')}*",
-    f"- Median events per case: "
-    f"*{trace_summary.get('Median events per case', 'Not available')}*",
-    "",
-    "The following table lists up to ten frequent trace variants. Each trace "
-    "is a sequence of recorded payment categories within a loan case.",
-    "",
-    *trace_table_lines,
-    "",
-    "The most frequent traces are dominated by Early Payment categories. "
-    "These sequences describe the recorded event log and should not be "
-    "interpreted as full loan workflows or proof of customer behavior across "
-    "all installments.",
-    "",
-    "### Most Frequent Adjacent Activity Transitions",
-    "",
-    "| Adjacent activity transition | Count |",
-    "|---|---:|",
-    *[
-        f"| {transition} | {count:,} |"
-        for transition, count in trace_transition_counts
-    ],
-    "",
-    "Events are ordered by relative payment day, installment number, and "
-    "installment version. The secondary sort fields make ordering "
-    "reproducible, but do not establish the true order of events with "
-    "identical payment days. Repeated payment entries may mean that adjacent "
-    "events do not correspond to distinct installments.",
-    "",
-    "## 9. Limitations",
-    "",
-    "1. The event log focuses on payment records rather than the full loan "
-    "lifecycle.",
-    "2. Event timestamps encode relative days and are not actual calendar dates.",
-    "3. Multiple records may exist for one installment, including partial or "
-    "multiple payment entries.",
-    "4. Payment categories are derived from recorded timing differences and "
-    "should not be treated as formal credit-risk or default labels.",
-    "5. Transition percentages are descriptive and do not imply causation.",
-    "6. Extreme cases require contextual investigation; they should not be "
-    "removed without a defensible data-quality reason.",
-    "",
-    "## 10. Reproducibility and Outputs",
-    "",
-    "Key outputs include:",
-    "",
-    "- data/processed/payment_event_log.parquet",
-    "- outputs/reports/payment_trace_variants.csv",
-    "- outputs/reports/payment_transitions.csv",
-    "- outputs/reports/payment_transition_probabilities.csv",
-    "- outputs/reports/payment_case_duration_summary.csv",
-    "- outputs/reports/extreme_payment_span_cases.csv",
-    "- outputs/figures/payment_events_per_case.png",
-    "- outputs/figures/observed_payment_span_distribution.png",
-    "",
-    "## 11. Conclusion",
-    "",
-    "The analysis demonstrates how payment-level data can be transformed "
-    "into an event log and used to examine case variation, payment-category "
-    "transitions, observed spans, and extreme cases. The findings are "
-    "exploratory and descriptive. Further work should validate installment "
-    "semantics, examine payment sequences at the installment level, and "
-    "extend the event log only where reliable lifecycle events are available.",
-    "",
-    "## Appendix: Extreme-Span Audit",
-    "",
-    *extreme_audit_lines,
-    "",
-]
+    print("Project findings report created successfully.")
+    print(f"Output file: {output_path}")
+    print(f"Loan cases: {total_cases:,}")
+    print(f"Recorded events: {total_events:,}")
+    print(f"Cases at or above P99: {cases_at_or_above_p99:,}")
+    print(f"Extreme cases reviewed: {int(extreme['cases_reviewed']):,}")
+    print(f"Mean events per case: {mean_events:,.2f}")
+    print(f"Median observed span: {median_span:,.2f} days")
 
-output_path.write_text("\n".join(findings) + "\n", encoding="utf-8")
 
-print("\nProject findings report completed.")
-print(f"Loan cases analyzed: {total_cases:,}")
-print(f"Payment events summarized: {total_events:,}")
-print(f"Cases with late payment events: {late_cases:,}")
-print(f"Report saved to: {output_path}")
+if __name__ == "__main__":
+    main()
